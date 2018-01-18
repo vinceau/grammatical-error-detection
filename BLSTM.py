@@ -13,6 +13,13 @@ import generators as gens
 import random
 import time
 
+import sys
+if sys.version_info[0] < 3:
+    # python 2
+    load_word2vec_format = gensim.models.KeyedVectors.load_word2vec_format
+else:
+    load_word2vec_format = gensim.models.Word2Vec.load_word2vec_format
+
 train_txt = "train.txt"
 test_txt = "dev.txt"
 vocab_dict = "model/BLSTMVocab.pkl"
@@ -94,7 +101,7 @@ def evaluate(model, word2id):
 
 class BLSTMw2v(Chain):
     def __init__(self, vocab_size, embed_size, hidden_size, output_size):
-        super().__init__(
+        super(BLSTMw2v, self).__init__(
             x2e = L.EmbedID(vocab_size, embed_size, ignore_label=-1),
             e2h_for = L.LSTM(embed_size, hidden_size),
             e2h_back = L.LSTM(embed_size, hidden_size),
@@ -163,7 +170,7 @@ def train():
     word2id["</s>"] = -1
 
     word2id, id2word, word_list, word_freq = make_dict(train_txt, word2id, id2word, word_freq)
-    word2vec_model = gensim.models.Word2Vec.load_word2vec_format('embedding.txt')
+    word2vec_model = load_word2vec_format('embedding.txt')
     model = BLSTMw2v(vocab_size, embed_size, hidden_size, output_size)
     model.initialize_embed(word2vec_model, word_list, word2id, id2word)
     if gpu >= 0:
