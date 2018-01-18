@@ -91,13 +91,17 @@ def evaluate(model, word2id):
         precision = correct_p/c_p
         recall = correct_r/c_r
         f_measure = (1 + 0.5**2)*precision*recall/(0.5**2*precision + recall)
+        print('Precision:\t{}'.format(precision))
+        print('Recall:\t{}'.format(recall))
+        print('F-value\t{}'.format(f_measure))
     except:
-        precision = 'nothing'
-        recall = 'nothing'
-        f_measure = 'nothing'
-    print('Precision:\t{}'.format(precision))
-    print('Recall:\t{}'.format(recall))
-    print('F-value\t{}'.format(f_measure))
+        precision = 0
+        recall = 0
+        f_measure = 0
+        print('Precision:\tnothing')
+        print('Recall:\tnothing')
+        print('F-value\tnothing')
+    return precision, recall, f_measure
 
 class BLSTMw2v(Chain):
     def __init__(self, vocab_size, embed_size, hidden_size, output_size):
