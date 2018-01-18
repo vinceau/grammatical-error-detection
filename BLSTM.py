@@ -1,4 +1,3 @@
-from EWE import SSWE_model
 import gensim
 import sys
 from functions import fill_batch, make_dict, take_len
@@ -20,13 +19,6 @@ vocab_dict = "model/BLSTMVocab.pkl"
 load_model = "model/BLSTM.model0"
 ana = "model/ana.txt"
 state_model = "model/BLSTM.sta"
-
-embed_type = False
-if embed_type:
-    state_embed = "SSWEmodel/sswe.sta"
-    embedVocab = 'SSWEmodel/ssweVoc.pkl'
-    embedModel = 'SSWEmodel/sswe.model14'
-    embed_vocab_dict = 'SSWEmodel/ssweVocabDict.pkl'
 
 
 vocab_size = take_len(train_txt)
@@ -133,14 +125,10 @@ class BLSTMw2v(Chain):
         self.e2h_back.reset_state()
 
     def initialize_embed(self, word2vec_model, word_list, word2id, id2word):
-        if embed_type:
-            for i in range(len(word2vec_model.x2e.W.data)):
-                self.x2e.W.data[i] = word2vec_model.x2e.W.data[i]
-        else:
-            for i in range(len(word_list)):
-                word = word_list[i]
-                if word in word2vec_model:
-                    self.x2e.W.data[i+2] = word2vec_model[word]
+        for i in range(len(word_list)):
+            word = word_list[i]
+            if word in word2vec_model:
+                self.x2e.W.data[i+2] = word2vec_model[word]
 
 def forward(batchs, tags, model, word2id, mode):
 
@@ -173,17 +161,9 @@ def train():
     word2id["<s>"] = 1
     id2word[-1] = "</s>"
     word2id["</s>"] = -1
-    if embed_type:
-        word2id = pickle.load(open(embed_vocab_dict, 'rb'))
-        id2word = {}
-        for key, value in word2id.items():
-            id2word[value] = key
-        word_list = None
-        sta = pickle.load(open(state_embed, "rb"))
-        word2vec_model = SSWE_model(sta["vocab_size"], sta["embed_size"], sta["hidden_size"])
-    else:
-        word2id, id2word, word_list, word_freq = make_dict(train_txt, word2id, id2word, word_freq)
-        word2vec_model = gensim.models.Word2Vec.load_word2vec_format('embedding.txt')
+
+    word2id, id2word, word_list, word_freq = make_dict(train_txt, word2id, id2word, word_freq)
+    word2vec_model = gensim.models.Word2Vec.load_word2vec_format('embedding.txt')
     model = BLSTMw2v(vocab_size, embed_size, hidden_size, output_size)
     model.initialize_embed(word2vec_model, word_list, word2id, id2word)
     if gpu >= 0:
