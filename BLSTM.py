@@ -179,8 +179,11 @@ def train():
     opt = O.Adam(alpha=0.001)
     opt.setup(model)
 
+    best_epoch = -1
+    best_fscore = -1
+
     for i in range(epoch):
-        print("epoch{}".format(i+1))
+        print("epoch{}".format(i))
         start = time.time()
         total_loss = 0
         gen1 = gens.word_list(train_txt)
@@ -199,7 +202,14 @@ def train():
             total_loss += accum_loss.data
         print("total_loss {}".format(total_loss))
         serializers.save_npz("{}{}".format(load_model, i), model)
-        evaluate(model, word2id)
+
+        # determine the best epoch and fscore
+        _, _, fscore = evaluate(model, word2id)
+        if fscore > best_fscore:
+            best_fscore = fscore
+            best_epoch = i
+        print('best epoch {} with fscore {:.6f}'.format(best_epoch, best_fscore))
+
         ff = open('embeding.txt','w')
         ff.write('{} {}\n'.format(len(model.x2e.W.data)-3, embed_size))
         for num in range(2, len(model.x2e.W.data)-1):
