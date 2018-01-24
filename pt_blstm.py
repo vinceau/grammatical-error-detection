@@ -35,7 +35,7 @@ output_size = 2
 hidden_size = 200
 extra_hidden_size = 50
 epoch = 20
-gpu = False
+gpu = True
 write_embeddings_to_file = False
 
 
