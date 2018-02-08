@@ -114,16 +114,12 @@ class BiLSTMw2v(nn.Module):
         self.use_cuda = use_cuda
 
         self.x2e = nn.Embedding(_vocab_size, embed_size)
-        self.e2h_for = nn.LSTM(embed_size, hidden_size)
-        self.e2h_back = nn.LSTM(embed_size, hidden_size)
         self.h2s = nn.Linear(hidden_size*2, extra_hidden_size)
         self.s2o = nn.Linear(extra_hidden_size, output_size)
 
         self.blstm = nn.LSTM(embed_size, hidden_size, num_layers=1, bidirectional=True)
         self.relu = nn.ReLU()
 
-        self.e2h_for_hidden = self._init_hidden()
-        self.e2h_back_hidden = self._init_hidden()
         self.blstm_hidden = self._init_hidden(2)
 
     def _init_hidden(self, layers=1):
@@ -135,11 +131,8 @@ class BiLSTMw2v(nn.Module):
         return (h, cell)
 
     def _reset_state(self):
-        self.zero_grad()
-        self.e2h_for_hidden = self._init_hidden()
-        self.e2h_back_hidden = self._init_hidden()
         self.blstm_hidden = self._init_hidden(2)
-
+        self.zero_grad()
 
     def initialize_embed(self, word2vec_model, word2id):
         w2v_vocab, w2v_vectors = torchwordemb.load_word2vec_text(word2vec_model)
@@ -154,7 +147,6 @@ class BiLSTMw2v(nn.Module):
     def forward(self, x):
         self._reset_state()
         e_states = []
-        h_back_states = []
         h_states = []
         o_states = []
 
@@ -169,7 +161,6 @@ class BiLSTMw2v(nn.Module):
         for h in h_states:
             o_states.append(self.s2o(self.relu(self.h2s(h))).view(-1, self.output_size))
 
-#       print(o_states)
         return o_states
 
 
@@ -177,36 +168,30 @@ def forward(batchs, tags, model, word2id, mode, use_cuda=False):
     softmax = nn.Softmax()
     cross_entropy_loss = nn.CrossEntropyLoss()
 
+    x = Variable(torch.LongTensor([[word2id[word] if word in word2id else word2id['<unk>'] for word in sen] for sen in batchs])).t()
+
+    if use_cuda:
+        x = x.cuda()
+
+    pres = model(x)
+    sortmax_pres = [softmax(pre) for pre in pres]
+    condition = x.data != -1
+
     if mode:  # are we calculating the loss??
         accum_loss = Variable(torch.zeros(1))  # initialize the loss count to zero
-        x = Variable(torch.LongTensor([[word2id[word] if word in word2id else word2id['<unk>'] for word in sen] for sen in batchs])).t()
         _tags = np.array(tags, dtype=np.int64)
         tags = Variable(torch.from_numpy(_tags)).t()
 
         if use_cuda:
             accum_loss = accum_loss.cuda()
-            x = x.cuda()
             tags = tags.cuda()
-
-        pres = model(x)
 
         for tag, pre in zip(tags, pres):
             accum_loss += cross_entropy_loss(pre, tag)
 
-        sortmax_pres = [softmax(pre) for pre in pres]
-        condition = x.data != -1
         return accum_loss, sortmax_pres, condition
 
-    else:
-        x = Variable(torch.LongTensor([[word2id[word] if word in word2id else word2id['<unk>'] for word in sen] for sen in batchs])).t()
-
-        if use_cuda:
-            x = x.cuda()
-
-        pres = model(x)
-        sortmax_pres = [softmax(pre) for pre in pres]
-        condition = x.data != -1
-        return sortmax_pres, condition
+    return sortmax_pres, condition
 
 
 def train():
@@ -240,7 +225,6 @@ def train():
         bl = list(range(len(batchs)))
         random.shuffle(bl)
         for n, j in enumerate(bl):
-            opt.zero_grad()
             tag0 = batchs[j][:]
             tags = [[int(c) for c in a[:-1]] for a in tag0]
             batch = fill_batch([b[-1].split() for b in batchs[j]])
@@ -250,9 +234,9 @@ def train():
             opt.step()
             total_loss += accum_loss.data[0]
         print("total_loss {}".format(total_loss))
-
         torch.save(model.state_dict(), "{}{}".format(load_model, i))
 
+        # determine the best epoch and fscore
         _, _, fscore = evaluate(model, word2id)
         if fscore > best_fscore:
             best_fscore = fscore
