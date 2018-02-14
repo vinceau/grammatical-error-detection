@@ -66,7 +66,7 @@ def evaluate(model, word2id):
         ev_tags.extend(tags)
 
 
-    for sent, tags in zip(all_sents, all_tags):
+    for sent, tags in zip(ev_sents, ev_tags):
         x = Variable(torch.LongTensor([word2id[word] if word in word2id else word2id['<unk>'] for word in sent]))
         if torch.cuda.is_available():
             x = x.cuda()
