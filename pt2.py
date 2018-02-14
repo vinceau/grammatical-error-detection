@@ -17,14 +17,14 @@ import random
 import time
 import warnings
 
-def precision_recall_f(pres, tags, cons, use_cuda=False):
+def precision_recall_f(pres, tags, cons):
     c_p = 0  # actual
     correct_p = 0  # predicted
     c_r = 0
     correct_r = 0
     _tags = np.array(tags, dtype=np.int64)
     tags = Variable(torch.from_numpy(_tags))
-    if use_cuda:
+    if torch.cuda.is_available():
         tags = tags.cuda()
 
     # pres is the post-soft max probabilities
@@ -68,7 +68,7 @@ def evaluate(model, word2id):
 
     for sent, tags in zip(all_sents, all_tags):
         x = Variable(torch.LongTensor([word2id[word] if word in word2id else word2id['<unk>'] for word in sent]))
-        if gpu:
+        if torch.cuda.is_available():
             x = x.cuda()
 
         cons = x.data != -1
@@ -97,12 +97,11 @@ def evaluate(model, word2id):
 
 class BiLSTMw2v(nn.Module):
 
-    def __init__(self, vocab_size, embed_size, hidden_size, output_size, extra_hidden_size, use_cuda=False):
+    def __init__(self, vocab_size, embed_size, hidden_size, output_size, extra_hidden_size):
         super(BiLSTMw2v, self).__init__()
         self.embed_size = embed_size
         self.hidden_size = hidden_size
         self.output_size = output_size
-        self.use_cuda = use_cuda
 
         self.x2e = nn.Embedding(vocab_size, embed_size)
         self.h2s = nn.Linear(hidden_size*2, extra_hidden_size)
@@ -117,7 +116,7 @@ class BiLSTMw2v(nn.Module):
     def _init_hidden(self, layers=1):
         h = Variable(torch.zeros(layers, 1, self.hidden_size))
         cell = Variable(torch.zeros(layers, 1, self.hidden_size))
-        if self.use_cuda:
+        if torch.cuda.is_available():
             h = h.cuda()
             cell = cell.cuda()
         return (h, cell)
@@ -162,7 +161,6 @@ output_size = 2
 hidden_size = 200
 extra_hidden_size = 50
 epoch = 20
-gpu = True
 write_embeddings_to_file = False
 
 
@@ -205,9 +203,9 @@ for ba in batchs:
     all_tags.extend(tags)
 
 
-model = BiLSTMw2v(vocab_size, embed_size, hidden_size, output_size, extra_hidden_size, use_cuda=gpu)
+model = BiLSTMw2v(vocab_size, embed_size, hidden_size, output_size, extra_hidden_size)
 
-if gpu:
+if torch.cuda.is_available():
     model = model.cuda()
 
 
@@ -225,7 +223,7 @@ for i in range(1, epoch+1):
 
         x = Variable(torch.LongTensor([word2id[word] if word in word2id else word2id['<unk>'] for word in sent]))
 
-        if gpu:
+        if torch.cuda.is_available():
             x = x.cuda()
 
         pres = model(x)
@@ -233,7 +231,7 @@ for i in range(1, epoch+1):
         _tags = np.array(tags, dtype=np.int64)
         tags = Variable(torch.from_numpy(_tags))
 
-        if gpu:
+        if torch.cuda.is_available():
             tags = tags.cuda()
 
         loss = cross_entropy_loss(pres, tags)
