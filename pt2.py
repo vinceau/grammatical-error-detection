@@ -17,6 +17,10 @@ import random
 import time
 import warnings
 
+random.seed(0)
+np.random.seed(0)
+torch.manual_seed(0)
+
 def precision_recall_f(pres, tags, cons):
     c_p = 0  # actual
     correct_p = 0  # predicted
@@ -44,13 +48,13 @@ def precision_recall_f(pres, tags, cons):
     return c_p, correct_p, c_r, correct_r
 
 
-def evaluate(model, word2id):
+def evaluate(model, word2id, data):
     c_p = 0
     correct_p = 0
     c_r = 0
     correct_r = 0
 
-    gen1 = gens.word_list(dev_txt)
+    gen1 = gens.word_list(data)
     gen2 = gens.batch(gens.sorted_parallel(gen1, embed_size*batch_size), batch_size)
     batchs = [b for b in gen2]
 
@@ -143,9 +147,79 @@ class BiLSTMw2v(nn.Module):
         return self.s2o(self.relu(s))
 
 
-random.seed(0)
-np.random.seed(0)
-torch.manual_seed(0)
+def train(model, opt, word2id, data, no_epochs=1):
+    best_epoch = -1
+    best_fscore = -1
+
+    softmax = nn.Softmax()
+    cross_entropy_loss = nn.CrossEntropyLoss()
+
+    total_loss = 0
+    gen1 = gens.word_list(data)
+    gen2 = gens.batch(gens.sorted_parallel(gen1, embed_size*batch_size), batch_size)
+    batchs = [b for b in gen2]
+    bl = list(range(len(batchs)))
+
+    all_sents = []
+    all_tags = []
+
+    for ba in batchs:
+        # for each batch
+        tags = [[int(c) for c in a[:-1]] for a in ba]
+        batch = fill_batch([b[-1].split() for b in ba])
+        tags = fill_batch(tags, token=0)
+        all_sents.extend(batch)
+        all_tags.extend(tags)
+
+
+    for i in range(1, no_epochs+1):
+        print('\nepoch no. {}'.format(i))
+        random.shuffle(bl)
+        epoch_total_loss = 0
+
+        for sent, tags in zip(all_sents, all_tags):
+            # for each batch
+            model.zero_grad()
+            model._reset_state()
+
+            x = Variable(torch.LongTensor([word2id[word] if word in word2id else word2id['<unk>'] for word in sent]))
+
+            if torch.cuda.is_available():
+                x = x.cuda()
+
+            pres = model(x)
+
+            _tags = np.array(tags, dtype=np.int64)
+            tags = Variable(torch.from_numpy(_tags))
+
+            if torch.cuda.is_available():
+                tags = tags.cuda()
+
+            loss = cross_entropy_loss(pres, tags)
+            loss.backward()
+
+            opt.step()
+            epoch_total_loss += loss.data[0]
+
+        print('total loss for epoch {} is {}'.format(i, epoch_total_loss))
+
+        _, _, fscore = evaluate(model, word2id, dev_txt)
+        if fscore > best_fscore:
+            best_fscore = fscore
+            best_epoch = i
+
+        torch.save(model.state_dict(), "{}{}".format(model_loc, i))
+
+        print('best epoch {} with fscore {:.6f}'.format(best_epoch, best_fscore))
+
+    return best_epoch
+
+
+# test best epoch model
+def test(model, epoch_no):
+    model.load_state_dict(torch.load("{}{}".format(model_loc, epoch_no)))
+    _, _, fscore = evaluate(model, word2id, test_txt)
+    print('\nModel {} scored an fscore of {} on test set'.format(epoch_no, fscore))
 
 train_txt = "fce-data/train.kaneko.txt"
 dev_txt = "fce-data/dev.kaneko.txt"
@@ -153,6 +227,8 @@ test_txt = "fce-data/test.kaneko.txt"
 vocab_dict = "model/ptBLSTMVocab.pkl"
 load_model = "model/ptBLSTM.model0"
 state_model = "model/ptBLSTM.sta"
+
+model_loc = "pt2models_no_relu/model"
 
 vocab_size = take_len(train_txt)
 batch_size = 64
@@ -162,10 +238,6 @@ hidden_size = 200
 extra_hidden_size = 50
 epoch = 20
 write_embeddings_to_file = False
-
-
-random.seed(0)
-
 
 id2word = {}
 word2id = {}
@@ -179,74 +251,13 @@ word2id["</s>"] = 2
 
 word2id, id2word, word_list, word_freq = make_dict(train_txt, word2id, id2word, word_freq)
 
-best_epoch = -1
-best_fscore = -1
-
-softmax = nn.Softmax()
-cross_entropy_loss = nn.CrossEntropyLoss()
-
-total_loss = 0
-gen1 = gens.word_list(train_txt)
-gen2 = gens.batch(gens.sorted_parallel(gen1, embed_size*batch_size), batch_size)
-batchs = [b for b in gen2]
-bl = list(range(len(batchs)))
-
-all_sents = []
-all_tags = []
-
-for ba in batchs:
-    # for each batch
-    tags = [[int(c) for c in a[:-1]] for a in ba]
-    batch = fill_batch([b[-1].split() for b in ba])
-    tags = fill_batch(tags, token=0)
-    all_sents.extend(batch)
-    all_tags.extend(tags)
-
-
 model = BiLSTMw2v(vocab_size, embed_size, hidden_size, output_size, extra_hidden_size)
 
 if torch.cuda.is_available():
     model = model.cuda()
 
-
 opt = optim.Adam(model.parameters(), lr=0.001)
 
-for i in range(1, epoch+1):
-    print('\nepoch no. {}'.format(i))
-    random.shuffle(bl)
-    epoch_total_loss = 0
-
-    for sent, tags in zip(all_sents, all_tags):
-        # for each batch
-        model.zero_grad()
-        model._reset_state()
-
-        x = Variable(torch.LongTensor([word2id[word] if word in word2id else word2id['<unk>'] for word in sent]))
-
-        if torch.cuda.is_available():
-            x = x.cuda()
-
-        pres = model(x)
-
-        _tags = np.array(tags, dtype=np.int64)
-        tags = Variable(torch.from_numpy(_tags))
-
-        if torch.cuda.is_available():
-            tags = tags.cuda()
-
-        loss = cross_entropy_loss(pres, tags)
-        loss.backward()
-
-        opt.step()
-        epoch_total_loss += loss.data[0]
-
-    print('total loss for epoch {} is {}'.format(i, epoch_total_loss))
-
-    _, _, fscore = evaluate(model, word2id)
-    if fscore > best_fscore:
-        best_fscore = fscore
-        best_epoch = i
-
-    print('best epoch {} with fscore {:.6f}'.format(best_epoch, best_fscore))
-
+best_epoch = train(model, opt, word2id, train_txt, no_epochs=20)
+test(model, best_epoch)
 
