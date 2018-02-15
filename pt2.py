@@ -21,6 +21,35 @@ random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)
 
+
+train_txt = "fce-data/train.kaneko.txt"
+dev_txt = "fce-data/dev.kaneko.txt"
+test_txt = "fce-data/test.kaneko.txt"
+vocab_dict = "model/ptBLSTMVocab.pkl"
+load_model = "model/ptBLSTM.model0"
+state_model = "model/ptBLSTM.sta"
+
+model_loc = "pt2fixcons/model"
+
+vocab_size = take_len(train_txt)
+batch_size = 64
+embed_size = 300
+output_size = 2
+hidden_size = 200
+extra_hidden_size = 50
+epoch = 20
+write_embeddings_to_file = False
+
+
+def get_sents_tags(filename):
+    gen1 = gens.word_list(filename)
+    tag0 = list(gen1)
+    tags = [[int(c) for c in a[:-1]] for a in tag0]
+    sents = [b[-1].split() for b in tag0]
+
+    return zip(sents, tags)
+
+
 def precision_recall_f(pres, tags, cons):
     c_p = 0  # actual
     correct_p = 0  # predicted
@@ -54,28 +83,12 @@ def evaluate(model, word2id, data):
     c_r = 0
     correct_r = 0
 
-    gen1 = gens.word_list(data)
-    gen2 = gens.batch(gens.sorted_parallel(gen1, embed_size*batch_size), batch_size)
-    batchs = [b for b in gen2]
-
-    ev_sents = []
-    ev_tags = []
-
-    for ba in batchs:
-        # for each batch
-        tags = [[int(c) for c in a[:-1]] for a in ba]
-        batch = fill_batch([b[-1].split() for b in ba])
-        tags = fill_batch(tags, token=0)
-        ev_sents.extend(batch)
-        ev_tags.extend(tags)
-
-
-    for sent, tags in zip(ev_sents, ev_tags):
+    for sent, tags in get_sents_tags(data):
         x = Variable(torch.LongTensor([word2id[word] if word in word2id else word2id['<unk>'] for word in sent]))
         if torch.cuda.is_available():
             x = x.cuda()
 
-        cons = x.data != -1
+        cons = x.data != word2id['</s>']
         pres = model(x)
         a, b, c, d =  precision_recall_f(pres, tags, cons)
         c_p += a
@@ -129,6 +142,14 @@ class BiLSTMw2v(nn.Module):
         self.blstm_hidden = self._init_hidden(2)
         self.zero_grad()
 
+    def initialize_embed(self, word2vec_model, word2id):
+        w2v_vocab, w2v_vectors = torchwordemb.load_word2vec_text(word2vec_model)
+        for word, i in word2id.items():
+            # ignore the unicode conversion/comparison warning
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                if word in w2v_vocab.keys():
+                    self.x2e.weight.data[i].copy_(w2v_vectors[w2v_vocab[word]])
 
     # do it per sentence for now
     def forward(self, x):
@@ -136,7 +157,7 @@ class BiLSTMw2v(nn.Module):
         h_states = []
         o_states = []
 
-        sent = self.x2e(x)
+        sent = self.relu(self.x2e(x))
         for word in sent:
             inp = word.view(1, -1, self.embed_size)
             out, self.blstm_hidden = self.blstm(inp, self.blstm_hidden)
@@ -155,29 +176,12 @@ def train(model, opt, word2id, data, no_epochs=1):
     cross_entropy_loss = nn.CrossEntropyLoss()
 
     total_loss = 0
-    gen1 = gens.word_list(data)
-    gen2 = gens.batch(gens.sorted_parallel(gen1, embed_size*batch_size), batch_size)
-    batchs = [b for b in gen2]
-    bl = list(range(len(batchs)))
-
-    all_sents = []
-    all_tags = []
-
-    for ba in batchs:
-        # for each batch
-        tags = [[int(c) for c in a[:-1]] for a in ba]
-        batch = fill_batch([b[-1].split() for b in ba])
-        tags = fill_batch(tags, token=0)
-        all_sents.extend(batch)
-        all_tags.extend(tags)
-
 
     for i in range(1, no_epochs+1):
         print('\nepoch no. {}'.format(i))
-        random.shuffle(bl)
         epoch_total_loss = 0
 
-        for sent, tags in zip(all_sents, all_tags):
+        for sent, tags in get_sents_tags(data):
             # for each batch
             model.zero_grad()
             model._reset_state()
@@ -221,23 +225,6 @@ def test(model, epoch_no):
     _, _, fscore = evaluate(model, word2id, test_txt)
     print('\nModel {} scored an fscore of {} on test set'.format(epoch_no, fscore))
 
-train_txt = "fce-data/train.kaneko.txt"
-dev_txt = "fce-data/dev.kaneko.txt"
-test_txt = "fce-data/test.kaneko.txt"
-vocab_dict = "model/ptBLSTMVocab.pkl"
-load_model = "model/ptBLSTM.model0"
-state_model = "model/ptBLSTM.sta"
-
-model_loc = "pt2models_no_relu/model"
-
-vocab_size = take_len(train_txt)
-batch_size = 64
-embed_size = 300
-output_size = 2
-hidden_size = 200
-extra_hidden_size = 50
-epoch = 20
-write_embeddings_to_file = False
 
 id2word = {}
 word2id = {}
@@ -252,6 +239,7 @@ word2id["</s>"] = 2
 word2id, id2word, word_list, word_freq = make_dict(train_txt, word2id, id2word, word_freq)
 
 model = BiLSTMw2v(vocab_size, embed_size, hidden_size, output_size, extra_hidden_size)
+model.initialize_embed('embedding.txt', word2id)
 
 if torch.cuda.is_available():
     model = model.cuda()
