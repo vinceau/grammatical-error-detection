@@ -35,7 +35,7 @@ embed_size = 300
 output_size = 2
 hidden_size = 200
 extra_hidden_size = 50
-epoch = 2
+epoch = 20
 gpu = -1
 
 
