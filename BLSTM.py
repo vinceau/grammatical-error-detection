@@ -27,6 +27,7 @@ vocab_dict = "model/BLSTMVocab.pkl"
 load_model = "model/BLSTM.model0"
 ana = "model/ana.txt"
 state_model = "model/BLSTM.sta"
+save_embeddings = False
 
 
 vocab_size = take_len(train_txt)
@@ -215,10 +216,11 @@ def train():
             best_epoch = i
         print('best epoch {} with fscore {:.6f}'.format(best_epoch, best_fscore))
 
-        ff = open('embeding.txt','w')
-        ff.write('{} {}\n'.format(len(model.x2e.W.data)-3, embed_size))
-        for num in range(2, len(model.x2e.W.data)-1):
-            ff.write('{} {}\n'.format(id2word[num], ' '.join([str(model.x2e.W.data[num][numnum]) for numnum in range(embed_size)])))
+        if save_embeddings:
+            ff = open('embeding.txt','w')
+            ff.write('{} {}\n'.format(len(model.x2e.W.data)-3, embed_size))
+            for num in range(2, len(model.x2e.W.data)-1):
+                ff.write('{} {}\n'.format(id2word[num], ' '.join([str(model.x2e.W.data[num][numnum]) for numnum in range(embed_size)])))
         print("time: {}".format(time.time() - start))
     pickle.dump(dict(word2id), open(vocab_dict, 'wb'))
     serializers.save_npz(load_model, model)
