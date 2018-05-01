@@ -1,0 +1,3 @@
+[submodule "ged-features"]
+	path = ged_features
+	url = https://github.com/vinceau/ged_features
