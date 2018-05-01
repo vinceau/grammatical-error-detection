@@ -27,6 +27,7 @@ vocab_dict = "model/BLSTMVocab.pkl"
 load_model = "model/BLSTM.model0"
 ana = "model/ana.txt"
 state_model = "model/BLSTM.sta"
+pretrained_embeddings = 'embedding.txt'
 save_embeddings = False
 
 
@@ -176,7 +177,7 @@ def train():
     word2id["</s>"] = -1
 
     word2id, id2word, word_list, word_freq = make_dict(train_txt, word2id, id2word, word_freq)
-    word2vec_model = load_word2vec_format('embedding.txt')
+    word2vec_model = load_word2vec_format(pretrained_embeddings)
     model = BLSTMw2v(vocab_size, embed_size, hidden_size, output_size)
     model.initialize_embed(word2vec_model, word_list, word2id, id2word)
     if gpu >= 0:
