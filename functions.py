@@ -39,11 +39,13 @@ def take_len(train_txt):
 def convert_word(sentence, word2id):
     return [word2id[word] for word in sentence]
 
-def make_dict(train_txt, word2id, id2word, word_freq):
+def make_dict(train_txt, word2id, id2word, word_freq, lower=False):
     word_l = []
     #id2word = {}
     with open(train_txt) as f:
         for line in f:
+            if lower:
+                line = line.lower()
             line_l = line.split('\t')
             words = line_l[-1].split()
             for word in words:
