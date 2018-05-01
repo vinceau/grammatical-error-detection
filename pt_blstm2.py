@@ -33,19 +33,18 @@ output_size = 2
 hidden_size = 200
 extra_hidden_size = 50
 epoch = 20
-gpu = True
 
 
 random.seed(0)
 
-def precision_recall_f(pres, tags, cons, use_cuda=False):
+def precision_recall_f(pres, tags, cons):
     c_p = 0  # actual
     correct_p = 0  # predicted
     c_r = 0
     correct_r = 0
     _tags = np.array(tags, dtype=np.int64)
     tags = Variable(torch.from_numpy(_tags).t())
-    if use_cuda:
+    if torch.cuda.is_available:
         tags = tags.cuda()
 
     # pres is the post-soft max probabilities
@@ -80,7 +79,7 @@ def evaluate(model, word2id):
         batch = [b[1:] for b in batch]
         batch = fill_batch([b[-1].split() for b in batch])
         tags = fill_batch(tags, token=-1)
-        pres, cons = forward(batch, tags, model, word2id, mode=False, use_cuda=gpu)
+        pres, cons = forward(batch, tags, model, word2id, mode=False)
         a, b, c, d =  precision_recall_f(pres, tags, cons)
         c_p += a
         correct_p += b
@@ -105,13 +104,12 @@ def evaluate(model, word2id):
 
 class BiLSTMw2v(nn.Module):
 
-    def __init__(self, _vocab_size, embed_size, hidden_size, output_size, extra_hidden_size, use_cuda=False):
+    def __init__(self, _vocab_size, embed_size, hidden_size, output_size, extra_hidden_size):
         super(BiLSTMw2v, self).__init__()
         self.vocab_size = _vocab_size
         self.embed_size = embed_size
         self.hidden_size = hidden_size
         self.output_size = output_size
-        self.use_cuda = use_cuda
 
         self.x2e = nn.Embedding(_vocab_size, embed_size)
         self.h2s = nn.Linear(hidden_size*2, extra_hidden_size)
@@ -125,7 +123,7 @@ class BiLSTMw2v(nn.Module):
     def _init_hidden(self, layers=1):
         h = Variable(torch.zeros(layers, 1, self.hidden_size))
         cell = Variable(torch.zeros(layers, 1, self.hidden_size))
-        if self.use_cuda:
+        if torch.cuda.is_available():
             h = h.cuda()
             cell = cell.cuda()
         return (h, cell)
@@ -164,13 +162,13 @@ class BiLSTMw2v(nn.Module):
         return o_states
 
 
-def forward(batchs, tags, model, word2id, mode, use_cuda=False):
+def forward(batchs, tags, model, word2id, mode):
     softmax = nn.Softmax()
     cross_entropy_loss = nn.CrossEntropyLoss()
 
     x = Variable(torch.LongTensor([[word2id[word] if word in word2id else word2id['<unk>'] for word in sen] for sen in batchs])).t()
 
-    if use_cuda:
+    if torch.cuda.is_available():
         x = x.cuda()
 
     pres = model(x)
@@ -182,7 +180,7 @@ def forward(batchs, tags, model, word2id, mode, use_cuda=False):
         _tags = np.array(tags, dtype=np.int64)
         tags = Variable(torch.from_numpy(_tags)).t()
 
-        if use_cuda:
+        if torch.cuda.is_available():
             accum_loss = accum_loss.cuda()
             tags = tags.cuda()
 
@@ -206,9 +204,9 @@ def train():
     word2id["</s>"] = 2
 
     word2id, id2word, word_list, word_freq = make_dict(train_txt, word2id, id2word, word_freq)
-    model = BiLSTMw2v(vocab_size, embed_size, hidden_size, output_size, extra_hidden_size, use_cuda=gpu)
+    model = BiLSTMw2v(vocab_size, embed_size, hidden_size, output_size, extra_hidden_size)
     model.initialize_embed('embedding.txt', word2id)
-    if gpu:
+    if torch.cuda.is_available():
         model.cuda()
     opt = optim.Adam(model.parameters(), lr=0.001)
 
@@ -229,7 +227,7 @@ def train():
             tags = [[int(c) for c in a[:-1]] for a in tag0]
             batch = fill_batch([b[-1].split() for b in batchs[j]])
             tags = fill_batch(tags, token=0)
-            accum_loss, pres, cons = forward(batch, tags, model, word2id, mode=True, use_cuda=gpu)
+            accum_loss, pres, cons = forward(batch, tags, model, word2id, mode=True)
             accum_loss.backward()
             opt.step()
             total_loss += accum_loss.data[0]
