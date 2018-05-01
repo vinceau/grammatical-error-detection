@@ -20,8 +20,9 @@ if sys.version_info[0] < 3:
 else:
     load_word2vec_format = gensim.models.Word2Vec.load_word2vec_format
 
-train_txt = "train.txt"
-test_txt = "dev.txt"
+train_txt = "data/fce-train.kaneko.txt"
+dev_txt = "data/fce-dev.kaneko.txt"
+test_txt = "data/fce-test.kaneko.txt"
 vocab_dict = "model/BLSTMVocab.pkl"
 load_model = "model/BLSTM.model0"
 ana = "model/ana.txt"
@@ -72,7 +73,7 @@ def evaluate(model, word2id):
     correct_r = 0
     m = model.copy()
     m.volatile = True
-    gen1 = gens.word_list(test_txt)
+    gen1 = gens.word_list(dev_txt)
     gen2 = gens.batch(gens.sorted_parallel(gen1, embed_size*batch_size), batch_size)
     batchs = [b for b in gen2]
     for batch in batchs:
