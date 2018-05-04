@@ -12,6 +12,10 @@ import pickle
 import generators as gens
 import random
 import time
+import os
+
+from models import BLSTM_wf_lstm
+from ged_features.word_level import WordFeatures
 
 import sys
 if sys.version_info[0] < 3:
@@ -20,15 +24,29 @@ if sys.version_info[0] < 3:
 else:
     load_word2vec_format = gensim.models.Word2Vec.load_word2vec_format
 
-train_txt = "data/fce-train.kaneko.txt"
-dev_txt = "data/fce-dev.kaneko.txt"
-test_txt = "data/fce-test.kaneko.txt"
-vocab_dict = "model/BLSTMVocab.pkl"
-load_model = "model/BLSTM.model0"
-ana = "model/ana.txt"
-state_model = "model/BLSTM.sta"
+train_txt = "data/fce-train.kaneko.lower.txt"
+dev_txt = "data/fce-dev.kaneko.lower.txt"
+test_txt = "data/fce-test.kaneko.lower.txt"
+
+output_folder = 'word_feats_go2'
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+vocab_dict = os.path.join(output_folder, "BLSTMVocab.pkl")
+load_model = os.path.join(output_folder, "BLSTM.model0")
+ana = os.path.join(output_folder, "ana.txt")
+state_model = os.path.join(output_folder, "BLSTM.sta")
 pretrained_embeddings = 'embedding.txt'
+#pretrained_embeddings = 'w2v_embedding.txt'
 save_embeddings = False
+
+
+word_feats = WordFeatures(ngrams=2)
+word_feats.add_ngram_data([
+    '/data/qu009/data/other_data/ngrams/unigram_counts.json',
+    '/data/qu009/data/other_data/ngrams/bigram_counts.json',
+])
+all_sents = [line[-1].strip().split() for line in gens.word_list(train_txt)]
+word_feats.preprocess(all_sents)
 
 
 vocab_size = take_len(train_txt)
@@ -145,11 +163,13 @@ class BLSTMw2v(Chain):
                 self.x2e.W.data[i+2] = word2vec_model[word]
 
 def forward(batchs, tags, model, word2id, mode):
+    feats = np.stack([f.to_numpy() for f in word_feats.batch_features(batchs)])
+    feats = Variable(feats.reshape(-1, len(batchs), word_feats.sparse_length()))
 
     if mode:
         accum_loss = Variable(xp.zeros((),dtype=xp.float32))
         x = Variable(xp.array([[word2id[word] if word in word2id else word2id['<unk>'] for word in sen] for sen in batchs], dtype=xp.int32).T)
-        pres = model(x)
+        pres = model(x, feats)
         tags = Variable(xp.array(tags, dtype=xp.int32).T)
         for tag, pre in zip(tags, pres):
             accum_loss += F.softmax_cross_entropy(pre, tag)
@@ -159,7 +179,7 @@ def forward(batchs, tags, model, word2id, mode):
 
     else:
         x = Variable(xp.array([[word2id[word] if word in word2id else word2id["<unk>"] for word in sen] for sen in batchs], dtype=xp.int32).T)
-        pres = model(x)
+        pres = model(x, feats)
         sortmax_pres = [F.softmax(pre) for pre in pres]
         condition = xp.array(x.data!=-1)
         return sortmax_pres, condition
@@ -178,7 +198,7 @@ def train():
 
     word2id, id2word, word_list, word_freq = make_dict(train_txt, word2id, id2word, word_freq)
     word2vec_model = load_word2vec_format(pretrained_embeddings)
-    model = BLSTMw2v(vocab_size, embed_size, hidden_size, output_size)
+    model = BLSTM_wf_lstm(vocab_size, embed_size, hidden_size, output_size, extra_hidden_size, feat_length=word_feats.sparse_length())
     model.initialize_embed(word2vec_model, word_list, word2id, id2word)
     if gpu >= 0:
         cuda.get_device(gpu).use()  # Make a specified GPU current
@@ -242,7 +262,7 @@ def test():
     total_predicts = []
     total_tags = []
     total_batchs = []
-    model = BLSTMw2v(sta["vocab_size"], sta["embed_size"], sta["hidden_size"], output_size)
+    model = BLSTM_wf_lstm(sta["vocab_size"], sta["embed_size"], sta["hidden_size"], output_size, extra_hidden_size, feat_length=word_feats.sparse_length())
     serializers.load_npz(load_model, model)
     if gpu >= 0:
         model.to_gpu()
