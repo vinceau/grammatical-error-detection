@@ -24,9 +24,9 @@ if sys.version_info[0] < 3:
 else:
     load_word2vec_format = gensim.models.Word2Vec.load_word2vec_format
 
-train_txt = "data/fce-train.kaneko.lower.txt"
-dev_txt = "data/fce-dev.kaneko.lower.txt"
-test_txt = "data/fce-test.kaneko.lower.txt"
+train_txt = "data/fce-train.kaneko.txt"
+dev_txt = "data/fce-dev.kaneko.txt"
+test_txt = "data/fce-test.kaneko.txt"
 
 output_folder = 'word_feats_go2'
 if not os.path.exists(output_folder):
