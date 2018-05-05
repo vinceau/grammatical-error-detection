@@ -14,7 +14,7 @@ import random
 import time
 import os
 
-from models import BLSTM_wf_lstm
+from models import BLSTM_wf_lstm, BLSTM_wf_b4_sec
 from ged_features.word_level import WordFeatures
 
 import sys
@@ -28,7 +28,7 @@ train_txt = "data/fce-train.kaneko.txt"
 dev_txt = "data/fce-dev.kaneko.txt"
 test_txt = "data/fce-test.kaneko.txt"
 
-output_folder = 'word_feats_go2'
+output_folder = 'word_feats_before_secret_50_cased'
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 vocab_dict = os.path.join(output_folder, "BLSTMVocab.pkl")
@@ -198,7 +198,7 @@ def train():
 
     word2id, id2word, word_list, word_freq = make_dict(train_txt, word2id, id2word, word_freq)
     word2vec_model = load_word2vec_format(pretrained_embeddings)
-    model = BLSTM_wf_lstm(vocab_size, embed_size, hidden_size, output_size, extra_hidden_size, feat_length=word_feats.sparse_length())
+    model = BLSTM_wf_b4_sec(vocab_size, embed_size, hidden_size, output_size, extra_hidden_size, feat_length=word_feats.sparse_length())
     model.initialize_embed(word2vec_model, word_list, word2id, id2word)
     if gpu >= 0:
         cuda.get_device(gpu).use()  # Make a specified GPU current
@@ -262,7 +262,8 @@ def test():
     total_predicts = []
     total_tags = []
     total_batchs = []
-    model = BLSTM_wf_lstm(sta["vocab_size"], sta["embed_size"], sta["hidden_size"], output_size, extra_hidden_size, feat_length=word_feats.sparse_length())
+
+    model = BLSTM_wf_b4_sec(sta["vocab_size"], sta["embed_size"], sta["hidden_size"], output_size, extra_hidden_size, feat_length=word_feats.sparse_length())
     serializers.load_npz(load_model, model)
     if gpu >= 0:
         model.to_gpu()
