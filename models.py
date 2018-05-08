@@ -1,7 +1,8 @@
 import chainer.links as L
 from chainer import functions as F
 from chainer import optimizers as O
-from chainer import Chain, Variable , cuda, serializers
+from chainer import Chain, Variable , cuda, serializers, Link
+import numpy as np
 
 class BLSTM_wf_lstm(Chain):
     def __init__(self, vocab_size, embed_size, hidden_size, output_size, extra_hidden_size, feat_length):
@@ -129,4 +130,30 @@ class BLSTM_wf_after_sec(Chain):
             word = word_list[i]
             if word in word2vec_model:
                 self.x2e.W.data[i+2] = word2vec_model[word]
+
+
+class SentenceFeats(Link):
+
+    def __init__(self, random_init=True):
+        super(SentenceFeats, self).__init__()
+        self.add_param('W', (1,1), dtype='float32')
+        self.add_param('b', (1,1), dtype='float32')
+
+        # doesn't change the dtype
+        self.W.data.fill(0)
+        self.b.data.fill(0)
+
+        if random_init:
+            # this does change the type so manually set it using astype
+            self.W.data = np.random.randn(1).astype('float32')
+            self.b.data = np.random.randn(1).astype('float32')
+
+    def __call__(self, x):
+        """ x is of shape sen_len x batch x features (1)
+        """
+        seq_len, _, feat_size = x.data.shape
+
+        # scores shape is now batch x features (1)
+        scores = F.sum(F.relu(F.bias(x, self.b)), 0) # sum across all the words
+        return F.scale(scores, self.W)
 
