@@ -40,11 +40,11 @@ pretrained_embeddings = 'embedding.txt'
 save_embeddings = False
 
 
-word_feats = WordFeatures(ngrams=2)
-word_feats.add_ngram_data([
+ngram_data = [
     '/data/qu009/data/other_data/ngrams/unigram_counts.json',
     '/data/qu009/data/other_data/ngrams/bigram_counts.json',
-])
+]
+word_feats = WordFeatures(ngram_data=ngram_data, use_word_sparse=False, use_posgrams=True, use_word_positions=False, join_posgrams=True, use_static=False, use_ngram_feats=False)
 all_sents = [line[-1].strip().split() for line in gens.word_list(train_txt)]
 word_feats.preprocess(all_sents)
 
