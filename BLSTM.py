@@ -41,10 +41,18 @@ save_embeddings = False
 
 
 ngram_data = [
-    '/data/qu009/data/other_data/ngrams/unigram_counts.json',
-    '/data/qu009/data/other_data/ngrams/bigram_counts.json',
+    '/data/qu009/data/other_data/ngrams/fce_unigram.json',
+    '/data/qu009/data/other_data/ngrams/fce_bigram.json',
 ]
-word_feats = WordFeatures(ngram_data=ngram_data, use_word_sparse=False, use_posgrams=True, use_word_positions=False, join_posgrams=True, use_static=False, use_ngram_feats=False)
+word_feats = WordFeatures(
+    ngram_data=ngram_data,
+    use_word_sparse=False,
+    use_posgrams=True,
+    use_word_positions=False,
+    join_posgrams=True,
+    use_static=False,
+    use_ngram_feats=True,
+)
 all_sents = [line[-1].strip().split() for line in gens.word_list(train_txt)]
 word_feats.preprocess(all_sents)
 
